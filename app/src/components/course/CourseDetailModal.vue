@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Course } from '@/types/course'
+import { useSettings } from '@/composables/useSettings'
 import { usePeriods } from '@/composables/useSchedule'
 
 const props = defineProps<{
@@ -13,11 +14,9 @@ const emit = defineEmits<{
   delete: [course: Course]
 }>()
 
-/** 1..7 → 一二三四五六日 */
-const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const
-
 const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const
 
+const { settings } = useSettings()
 const { periods } = usePeriods()
 
 /** 节次区间文本，如 第 1-2 节 */
@@ -32,6 +31,15 @@ const timeRangeText = computed(() => {
   const e = periods.value[props.course.endPeriod - 1]
   if (!s || !e) return ''
   return `${s.startTime} - ${e.endTime}`
+})
+
+/** 学期周次范围：第 X-Y 周；全学期则显示「全学期」 */
+const weekRangeText = computed(() => {
+  const total = settings.value.totalWeeks
+  const sw = props.course.startWeek ?? 1
+  const ew = props.course.endWeek ?? total
+  if (sw <= 1 && ew >= total) return '全学期'
+  return sw === ew ? `第 ${sw} 周` : `第 ${sw}-${ew} 周`
 })
 </script>
 
@@ -62,7 +70,7 @@ const timeRangeText = computed(() => {
           </div>
           <div class="modal__row">
             <dt>周次</dt>
-            <dd>{{ WEEK_LABELS[course.dayOfWeek - 1] }}周 · 全学期</dd>
+            <dd>{{ weekRangeText }}</dd>
           </div>
         </dl>
 
