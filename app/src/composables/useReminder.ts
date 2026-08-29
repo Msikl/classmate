@@ -9,6 +9,7 @@
  */
 
 import type { Course } from '@/types/course'
+import { isOnWeek } from '@/types/course'
 import { useCourses } from '@/composables/useCourses'
 import { useSettings } from '@/composables/useSettings'
 import { usePeriods } from '@/composables/useSchedule'
@@ -70,9 +71,18 @@ export function computeDailyReminders(
   const d = String(day.getDate()).padStart(2, '0')
   const ds = `${y}-${m}-${d}`
 
+  // 该 day 所属周号（相对开学日期第 1 周起）
+  const start = parseDate(startDate)
+  const firstMonday = new Date(start)
+  firstMonday.setDate(start.getDate() - (start.getDay() === 0 ? 7 : start.getDay() - 1))
+  const weekOfDay =
+    Math.floor((day.getTime() - firstMonday.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+
   const out: Reminder[] = []
   for (const course of courses) {
     if (course.dayOfWeek !== weekday) continue
+    // 按起止周范围过滤：不在该课程上课周内则不提醒
+    if (!isOnWeek(course, weekOfDay)) continue
     const st = scheduleTime(course.startPeriod)
     if (!st) continue
     const dueAt = parseDate(ds)

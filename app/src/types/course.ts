@@ -30,6 +30,10 @@ export interface Course {
   startPeriod: number
   /** 结束节次（含），如第 2 节 */
   endPeriod: number
+  /** 起始周（第几周起上，1-based；缺省=1 全学期起） */
+  startWeek?: number
+  /** 结束周（第几周止上，含；缺省=总周数 全学期止） */
+  endWeek?: number
   /** 预留：出现的具体周次，全学期暂不参与过滤。只读以避免派发不可变数据时的类型冲突 */
   weeks?: readonly number[]
   /** 预留：周规律过滤器，全学期默认 'all' */
@@ -86,3 +90,14 @@ export const COURSE_COLORS = [
   '#EDC948',
   '#B07AA1',
 ] as const
+
+/**
+ * 课程在第 week 周是否上课。
+ * - startWeek/endWeek 缺省视为全学期（始终上课）。
+ * - 单/双周（type）暂不影响：全按区间判断，后续如需再扩展。
+ */
+export function isOnWeek(course: Pick<Course, 'startWeek' | 'endWeek'>, week: number): boolean {
+  const start = course.startWeek ?? 1
+  const end = course.endWeek ?? Number.POSITIVE_INFINITY
+  return week >= start && week <= end
+}

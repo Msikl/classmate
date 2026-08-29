@@ -8,6 +8,7 @@ import { useCourses } from '@/composables/useCourses'
 import { useWeek } from '@/composables/useWeek'
 import { usePeriods } from '@/composables/useSchedule'
 import type { DayOfWeek, Course } from '@/types/course'
+import { isOnWeek } from '@/types/course'
 
 /** 课程 store 单例（响应式） */
 const { getCoursesByDay, updateCourse, removeCourse } = useCourses()
@@ -65,14 +66,30 @@ const periodCount = computed(() => periods.value.length)
 const WEEK_LABELS: readonly string[] = ['一', '二', '三', '四', '五', '六', '日']
 const DAYS = [1, 2, 3, 4, 5, 6, 7] as const satisfies readonly DayOfWeek[]
 
-/** 当前周信息（P2：based on 开学日期自动计算） */
-const { weekStartDate } = useWeek()
+/** 今天对应的星期几（1=周一..7=周日），用于今日列高亮（跟随星期几，跨周不变） */
+const todayWeekday = (() => {
+  const d = new Date()
+  const wd = d.getDay() === 0 ? 7 : d.getDay()
+  return wd as DayOfWeek
+})()
+
+/**
+ * 当前周信息。
+ * viewedWeekStart = 所「查看」周的周一（随顶部切换器联动，决定表头日期）；
+ * viewedWeek = 所查看周号（用于按课程起止周过滤显示）。
+ */
+const { viewedWeekStart, viewedWeek } = useWeek()
 
 /** 取某天（1..7，1=周一）对应的 月/日 显示文本 */
 function formatDayDate(day: DayOfWeek): string {
-  const d = new Date(weekStartDate.value)
+  const d = new Date(viewedWeekStart.value)
   d.setDate(d.getDate() + (day - 1))
   return `${d.getMonth() + 1}-${d.getDate()}`
+}
+
+/** 某天可见课程：先取该天全部，再按「所查看周」过滤（仅显示该课程的起止周内） */
+function visibleCourses(day: DayOfWeek): Course[] {
+  return getCoursesByDay(day).filter((c) => isOnWeek(c, viewedWeek.value))
 }
 
 /** 计算课程卡在列 body 内的 top/height 百分比（按节次均分） */
@@ -92,7 +109,7 @@ function computePos(course: Course): { top: string; height: string } {
     <!-- sticky 表头行 -->
     <div class="week-view__head-row">
       <div class="week-view__corner" />
-      <div v-for="day in DAYS" :key="day" class="week-view__head">
+      <div v-for="day in DAYS" :key="day" class="week-view__head" :class="{ 'week-view__head--today': day === todayWeekday }">
         <span class="week-view__head-day">{{ WEEK_LABELS[day - 1] }}</span>
         <span class="week-view__head-date">{{ formatDayDate(day) }}</span>
       </div>
@@ -108,9 +125,9 @@ function computePos(course: Course): { top: string; height: string } {
         </div>
       </div>
 
-      <div v-for="day in DAYS" :key="day" class="week-view__col">
+      <div v-for="day in DAYS" :key="day" class="week-view__col" :class="{ 'week-view__col--today': day === todayWeekday }">
         <div
-          v-for="course in getCoursesByDay(day)"
+          v-for="course in visibleCourses(day)"
           :key="course.id"
           class="week-view__slot"
           :style="computePos(course)"
@@ -187,6 +204,14 @@ function computePos(course: Course): { top: string; height: string } {
   color: #86909c;
   line-height: 1.2;
 }
+.week-view__head--today .week-view__head-day {
+  color: #4e79a7;
+  font-weight: 700;
+}
+.week-view__head--today .week-view__head-date {
+  color: #4e79a7;
+  font-weight: 600;
+}
 
 /* 主体行：刻度与 7 天一体，等高 */
 .week-view__body-row {
@@ -232,6 +257,9 @@ function computePos(course: Course): { top: string; height: string } {
   min-height: calc(var(--period-count) * var(--period-h));
   box-sizing: border-box;
   border-left: 1px solid #e5e6eb;
+}
+.week-view__col--today {
+  background-color: #f2f7fc;
 }
 .week-view__slot {
   position: absolute;

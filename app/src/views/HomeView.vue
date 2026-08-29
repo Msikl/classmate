@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useWeek } from '@/composables/useWeek'
 import { useCourses } from '@/composables/useCourses'
 import WeekView from '@/components/course/WeekView.vue'
+import WeekPickerMenu from '@/components/course/WeekPickerMenu.vue'
+import AddMenu from '@/components/course/AddMenu.vue'
 import CourseForm from '@/components/course/CourseForm.vue'
 
 const router = useRouter()
-const { currentWeek, totalWeeks } = useWeek()
 const coursesStore = useCourses()
 
 /** 新建课程表单是否可见 */
@@ -20,6 +20,7 @@ function handleCreate(draft: {
   dayOfWeek: 1 | 2 | 3 | 4 | 5 | 6 | 7
   startPeriod: number
   endPeriod: number
+  color?: string
 }) {
   coursesStore.addCourse(draft)
   showCreate.value = false
@@ -28,15 +29,11 @@ function handleCreate(draft: {
 
 <template>
   <div class="home">
-    <header class="home__header">
-      <h1 class="home__title">第 {{ currentWeek }} 周 / 共 {{ totalWeeks }} 周</h1>
-      <div class="home__actions">
-        <button class="home__add" type="button" @click="showCreate = true">＋ 添加课程</button>
-        <button class="home__settings" type="button" aria-label="设置" @click="router.push('/settings')">
-          ⚙︎
-        </button>
-      </div>
-    </header>
+    <div class="home__topbar">
+      <WeekPickerMenu />
+      <AddMenu @add-course="showCreate = true" @settings="router.push('/settings')" />
+    </div>
+
     <WeekView />
 
     <CourseForm v-if="showCreate" :initial="null" @submit="handleCreate" @close="showCreate = false" />
@@ -49,44 +46,17 @@ function handleCreate(draft: {
   padding: 12px;
   box-sizing: border-box;
 }
-.home__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.home__title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-.home__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.home__add {
-  height: 32px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 8px;
-  background-color: #4e79a7;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.home__settings {
-  height: 32px;
-  width: 32px;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
-  background-color: #fff;
-  color: #4e5969;
-  font-size: 16px;
-  cursor: pointer;
+.home__topbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 10px;
+}
+.home__topbar :deep(.add-menu) {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 </style>

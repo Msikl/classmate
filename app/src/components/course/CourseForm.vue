@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { usePeriods } from '@/composables/useSchedule'
+import { useSettings } from '@/composables/useSettings'
 import type { Course, DayOfWeek } from '@/types/course'
+import { COURSE_COLORS } from '@/types/course'
 
 /** 新建/编辑共用表单 */
 const props = defineProps<{
   /** 编辑时的初始值；null 表示新建 */
-  initial: (Pick<Course, 'name' | 'teacher' | 'classroom' | 'dayOfWeek' | 'startPeriod' | 'endPeriod'> & { id?: string }) | null
+  initial: (Pick<
+    Course,
+    'name' | 'teacher' | 'classroom' | 'dayOfWeek' | 'startPeriod' | 'endPeriod' | 'color' | 'startWeek' | 'endWeek'
+  > & { id?: string }) | null
 }>()
 
 const emit = defineEmits<{
@@ -17,12 +22,18 @@ const emit = defineEmits<{
     dayOfWeek: DayOfWeek
     startPeriod: number
     endPeriod: number
+    color?: string
+    /** 周次范围（可选，缺省=全学期） */
+    startWeek?: number
+    endWeek?: number
   }]
   close: []
 }>()
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const
 const DAY_VALUES: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 7]
+
+const { settings } = useSettings()
 
 /** 响应式节次表（随设置-单节时长联动） */
 const { periods } = usePeriods()
@@ -49,6 +60,11 @@ const form = reactive({
   startPeriod: 1,
   /** 持续节数 */
   durationPeriods: 1,
+  /** 主题色（空=新建时自动分配） */
+  color: '',
+  /** 周次范围（默认全学期） */
+  startWeek: 1,
+  endWeek: settings.value.totalWeeks,
 })
 
 /** 填充初始值（挂载 / initial 变化时） */
@@ -61,6 +77,9 @@ watch(
     form.dayOfWeek = init?.dayOfWeek ?? 1
     form.startPeriod = init?.startPeriod ?? 1
     form.durationPeriods = Math.max(1, (init?.endPeriod ?? init?.startPeriod ?? 1) - (init?.startPeriod ?? 1) + 1)
+    form.color = init?.color ?? ''
+    form.startWeek = init?.startWeek ?? 1
+    form.endWeek = init?.endWeek ?? settings.value.totalWeeks
   },
   { immediate: true },
 )
@@ -71,7 +90,8 @@ const autoEndPeriod = computed(() =>
 )
 
 const nameValid = computed(() => form.name.trim().length > 0)
-const canSubmit = computed(() => nameValid.value)
+const weekValid = computed(() => form.startWeek >= 1 && form.endWeek >= form.startWeek)
+const canSubmit = computed(() => nameValid.value && weekValid.value)
 
 /** 结束时间文本：首节起始 ~ 末节结束 */
 const endTimeText = computed(() => {
@@ -90,6 +110,9 @@ function onSubmit() {
     dayOfWeek: form.dayOfWeek,
     startPeriod: form.startPeriod,
     endPeriod: autoEndPeriod.value,
+    color: form.color || undefined,
+    startWeek: form.startWeek,
+    endWeek: form.endWeek,
   })
 }
 </script>
@@ -145,6 +168,46 @@ function onSubmit() {
               </select>
             </label>
           </div>
+
+          <div class="form-field">
+            <span class="form-field__label">颜色</span>
+            <div class="color-picker">
+              <button
+                v-for="c in COURSE_COLORS"
+                :key="c"
+                type="button"
+                class="color-picker__swatch"
+                :class="{ 'color-picker__swatch--active': form.color === c }"
+                :style="{ backgroundColor: c }"
+                :aria-label="`选择颜色 ${c}`"
+                @click="form.color = c"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-field">
+              <span class="form-field__label">起始周</span>
+              <input
+                v-model.number="form.startWeek"
+                class="form-field__input"
+                type="number"
+                min="1"
+                :max="settings.totalWeeks"
+              />
+            </label>
+            <label class="form-field">
+              <span class="form-field__label">结束周</span>
+              <input
+                v-model.number="form.endWeek"
+                class="form-field__input"
+                type="number"
+                min="1"
+                :max="settings.totalWeeks"
+              />
+            </label>
+          </div>
+          <p v-if="!weekValid" class="form-field__error">结束周不能早于起始周</p>
 
           <p class="form-field__hint">结束时间：{{ endTimeText }}</p>
 
@@ -248,6 +311,23 @@ function onSubmit() {
   font-size: 12px;
   color: #86909c;
   margin: 0;
+}
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.color-picker__swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.color-picker__swatch--active {
+  border-color: #1f2329;
+  box-shadow: 0 0 0 2px #fff inset;
 }
 .form-modal__submit {
   height: 42px;
