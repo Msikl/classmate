@@ -75,11 +75,11 @@ const weekRangeText = computed(() => {
         </dl>
 
         <footer class="modal__footer">
-          <button class="modal__btn modal__btn--delete" type="button" @click="emit('delete', course)">
-            删除
-          </button>
           <button class="modal__btn modal__btn--edit" type="button" @click="emit('edit', course)">
             编辑
+          </button>
+          <button class="modal__btn modal__btn--delete" type="button" @click="emit('delete', course)">
+            删除
           </button>
         </footer>
       </div>
@@ -178,9 +178,12 @@ const weekRangeText = computed(() => {
   cursor: pointer;
 }
 .modal__btn--delete {
-  background-color: #fdeceb;
+  flex: 0.62;
+  height: 36px;
+  background-color: #fff;
   color: #e15759;
   border: 1px solid #f5c6c2;
+  font-weight: 500;
 }
 .modal__btn--edit {
   background-color: #4e79a7;

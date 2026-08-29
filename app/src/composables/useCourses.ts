@@ -10,7 +10,7 @@
 import { computed, readonly, ref } from 'vue'
 import type { Course, DayOfWeek } from '@/types/course'
 import { COURSE_COLORS } from '@/types/course'
-import { readJSON, writeJSON } from '@/utils/storage'
+import { readJSON, writeJSON, readRaw } from '@/utils/storage'
 
 /** localStorage key（前缀 classmate: 由 storage.ts 统一加） */
 const STORAGE_KEY = 'courses'
@@ -44,6 +44,15 @@ function makeId(): string {
 
 /** 初始化课程：已初始化则以本地存储为准（含空数组）；从未用过（无标记且无数据）才播种种子 */
 function loadInitial(): Course[] {
+  const raw = readRaw(STORAGE_KEY)
+  // 数据损坏（key 存在但 JSON 解析失败）：存 bak 保留现场，避免静默覆盖丢失（代码审查 #4）
+  if (raw !== null && raw !== undefined) {
+    try {
+      JSON.parse(raw)
+    } catch {
+      writeJSON(`${STORAGE_KEY}.bak`, raw)
+    }
+  }
   const saved = readJSON<Course[]>(STORAGE_KEY, [])
   const inited = readJSON<boolean>(INITED_KEY, false)
   if (inited) return saved

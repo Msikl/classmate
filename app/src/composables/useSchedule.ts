@@ -29,14 +29,3 @@ export function usePeriods() {
   )
   return { periods }
 }
-
-/** 便捷：按节次序号取单个节次（基于默认节次表）；越界返回 undefined */
-export function getPeriod(index: number): Period | undefined {
-  return DEFAULT_PERIODS[index - 1]
-}
-
-/** 便捷：取某节次的起始/结束时间（基于默认节次表，静态）；越界容错 '--:--' */
-export function getPeriodTime(index: number): { startTime: string; endTime: string } {
-  const p = DEFAULT_PERIODS[index - 1]
-  return { startTime: p?.startTime ?? '--:--', endTime: p?.endTime ?? '--:--' }
-}

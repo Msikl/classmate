@@ -103,6 +103,8 @@ export function computeDailyReminders(
 export interface ReminderScheduler {
   enqueueReminders(items: Reminder[]): void
   tick(now: Date): Reminder[]
+  /** 清空待触发队列与已消费记录（用于关闭提醒时） */
+  clear(): void
   readonly pendingCount: number
   peek(): Reminder[]
 }
@@ -130,9 +132,15 @@ export function createScheduler(): ReminderScheduler {
     return due
   }
 
+  function clear(): void {
+    pending = []
+    consumed.clear()
+  }
+
   return {
     enqueueReminders,
     tick,
+    clear,
     get pendingCount() {
       return pending.length
     },
@@ -142,15 +150,8 @@ export function createScheduler(): ReminderScheduler {
 
 /* ---------------- 通知适配层 ---------------- */
 
-/** Web Notification 适配：浏览器 preview 下可弹系统通知；无权限时静默降级。 */
+/** Web Notification 适配：浏览器 preview 下可弹系统通知；无权限时静默降级。不主动请求（避免首启弹窗，UX-B1）。 */
 export function createWebNotificationService(): NotificationService {
-  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-    try {
-      void Notification.requestPermission()
-    } catch {
-      // 忽略
-    }
-  }
   return {
     notify(title, body) {
       if (typeof Notification === 'undefined') return false
@@ -163,6 +164,18 @@ export function createWebNotificationService(): NotificationService {
         return false
       }
     },
+  }
+}
+
+/** Web 环境下按需请求通知权限（用户已开启提醒时调用，避免首启打扰） */
+export function requestWebNotificationPermission(): void {
+  if (typeof Notification === 'undefined') return
+  if (Notification.permission === 'default') {
+    try {
+      void Notification.requestPermission()
+    } catch {
+      // 忽略
+    }
   }
 }
 
@@ -302,14 +315,17 @@ export function useReminder() {
     }
     // Web 分支
     if (!settings.value.notificationEnabled) {
+      // 关闭提醒：清空已装载队列（防止旧队列到点仍弹——F 代码审查 #1）
+      scheduler.clear()
       return
     }
     scheduler.enqueueReminders(items)
   }
 
-  /** 供定时器调用（仅 Web 环境使用；原生由系统触发无需轮询） */
+  /** 供定时器调用（仅 Web 环境使用；原生由系统触发无需轮询）。关闭提醒或原生环境均不触发。 */
   function poll(): void {
     if (isNative) return
+    if (!settings.value.notificationEnabled) return
     const due = scheduler.tick(new Date())
     for (const r of due) webService.notify(r.title, r.body)
   }

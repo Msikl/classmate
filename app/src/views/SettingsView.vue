@@ -3,12 +3,15 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettings } from '@/composables/useSettings'
 import { useCourses } from '@/composables/useCourses'
+import { usePeriods } from '@/composables/useSchedule'
+import { buildDaySchedule } from '@/types/schedule'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { Course } from '@/types/course'
 
 const router = useRouter()
 const { settings, updateSettings, resetSettings } = useSettings()
 const { importCourses, syncState } = useCourses()
+const { periods } = usePeriods()
 
 /** 表单草稿（本地编辑，保存时统一写入） */
 const form = ref({
@@ -42,6 +45,17 @@ watch(settings, (s) => {
   form.value.notificationMinutes = s.notificationMinutes
 })
 
+// 提醒开关 / 提前分钟数：即改即存（不依赖「保存」，避免 B3 的「开了没生效」困惑）
+watch(
+  () => [form.value.notificationEnabled, form.value.notificationMinutes],
+  () => {
+    updateSettings({
+      notificationEnabled: form.value.notificationEnabled,
+      notificationMinutes: form.value.notificationMinutes,
+    })
+  },
+)
+
 /** 总周数输入合法性 */
 const weeksValid = computed(() => form.value.totalWeeks >= 1 && form.value.totalWeeks <= 30)
 const classDurationValid = computed(() => form.value.classDurationMinutes >= 20 && form.value.classDurationMinutes <= 120)
@@ -50,13 +64,36 @@ const minutesValid = computed(() => form.value.notificationMinutes >= 0 && form.
 const periodsValid = computed(
   () => form.value.morningPeriods >= 0 && form.value.noonPeriods >= 0 && form.value.eveningPeriods >= 0,
 )
+/** 三段首节时间非空（防清空 → NaN → "NaN:NaN"） */
+const timeValid = computed(
+  () => !!form.value.morningStart && !!form.value.noonStart && !!form.value.eveningStart,
+)
+/** 所有设置项是否合法（save 门禁） */
+const canSaveAll = computed(
+  () => weeksValid.value && classDurationValid.value && breakValid.value && minutesValid.value && periodsValid.value && timeValid.value,
+)
 
 /** 总节数（三段和，预览用） */
 const totalPeriodsPreview = computed(
   () => form.value.morningPeriods + form.value.noonPeriods + form.value.eveningPeriods,
 )
 
+/** 基于表单（未保存也实时）的节次预览：第几节=几点，供新手核对（B4） */
+const periodPreview = computed(() => {
+  const f = form.value
+  return buildDaySchedule({
+    classDuration: f.classDurationMinutes,
+    breakMinutes: f.breakMinutes,
+    sections: [
+      { key: 'morning', start: f.morningStart || '08:00', count: Math.max(f.morningPeriods, 0) },
+      { key: 'noon', start: f.noonStart || '14:00', count: Math.max(f.noonPeriods, 0) },
+      { key: 'evening', start: f.eveningStart || '19:00', count: Math.max(f.eveningPeriods, 0) },
+    ],
+  })
+})
+
 function save() {
+  if (!canSaveAll.value) return // 任一非法则不保存（代码审查 #2）
   updateSettings({
     startDate: form.value.startDate,
     totalWeeks: form.value.totalWeeks,
@@ -123,7 +160,9 @@ function handleImport() {
       const sp = Number(item.startPeriod)
       const ep = Number(item.endPeriod)
       const name = String(item.name ?? '').trim()
-      if (!name || ![1, 2, 3, 4, 5, 6, 7].includes(day) || !(sp >= 1) || !(ep >= sp)) continue
+      const maxP = periods.value.length
+      // 校验必要字段 + 节次在合理区间内（代码审查 #3：导入越界课程跳过）
+      if (!name || ![1, 2, 3, 4, 5, 6, 7].includes(day) || !(sp >= 1) || !(ep >= sp) || !((ep ?? 0) <= maxP)) continue
       drafts.push({
         name,
         teacher: item.teacher ? String(item.teacher) : undefined,
@@ -147,7 +186,7 @@ function handleImport() {
     <header class="settings__header">
       <button class="settings__back" type="button" @click="back">← 返回</button>
       <h1 class="settings__title">设置</h1>
-      <button class="settings__save" type="button" @click="save">保存</button>
+      <button class="settings__save" type="button" :disabled="!canSaveAll" @click="save">保存</button>
     </header>
 
     <section class="settings__group">
@@ -162,6 +201,18 @@ function handleImport() {
       <p v-if="!weeksValid" class="settings__error">总周数应为 1–30</p>
 
       <div class="settings__section-title">节次安排（共 {{ totalPeriodsPreview }} 节）</div>
+      <p class="settings__hint">下面每节课几点起止，请对照你学校课表核对，不符再改。</p>
+
+      <div class="settings__period-preview">
+        <div
+          v-for="p in periodPreview"
+          :key="p.index"
+          class="settings__period-preview-row"
+        >
+          <span class="settings__period-preview-index">第 {{ p.index }} 节</span>
+          <span class="settings__period-preview-time">{{ p.startTime }} - {{ p.endTime }}</span>
+        </div>
+      </div>
 
       <label class="settings__row">
         <span class="settings__label">单节课时长（分钟）</span>
@@ -303,13 +354,16 @@ function handleImport() {
 }
 .settings__save {
   border: none;
-  background: #4e79a7;
+  background-color: #4e79a7;
   color: #fff;
   font-size: 14px;
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
+}
+.settings__save:disabled {
+  background-color: #c4cdd7;
+  cursor: not-allowed;
 }
 .settings__group {
   background-color: #fff;
@@ -403,10 +457,41 @@ function handleImport() {
   font-weight: 600;
   cursor: pointer;
 }
+.settings__hint {
+  font-size: 12px;
+  color: #86909c;
+  padding: 0 4px 8px;
+}
 .settings__import-msg {
   font-size: 12px;
   color: #4e5969;
   margin: 0;
+}
+.settings__period-preview {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #efeff1;
+  border-radius: 8px;
+  margin: 0 4px 8px;
+}
+.settings__period-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  border-bottom: 1px solid #f4f5f7;
+  font-size: 13px;
+}
+.settings__period-preview-row:last-child {
+  border-bottom: none;
+}
+.settings__period-preview-index {
+  color: #1f2329;
+  font-weight: 500;
+}
+.settings__period-preview-time {
+  color: #4e5969;
+  font-variant-numeric: tabular-nums;
 }
 .settings__section-title {
   font-size: 13px;

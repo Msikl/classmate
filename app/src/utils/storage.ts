@@ -18,6 +18,11 @@ export function readJSON<T>(key: string, fallback: T): T {
   }
 }
 
+/** 读原始字符串（区分「无 key」与「值损坏」，供容错分支使用） */
+export function readRaw(key: string): string | null {
+  return loadRaw(key)
+}
+
 /** JSON.stringify 后写入；异常时静默（尽量不打断操作流程） */
 export function writeJSON<T>(key: string, value: T): boolean {
   try {

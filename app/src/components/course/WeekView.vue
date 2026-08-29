@@ -95,12 +95,14 @@ function visibleCourses(day: DayOfWeek): Course[] {
   return getCoursesByDay(day).filter((c) => isOnWeek(c, viewedWeek.value))
 }
 
-/** 计算课程卡在列 body 内的 top/height 百分比（按节次均分） */
+/** 计算课程卡在列 body 内的 top/height 百分比（按节次均分；越界 clamp，防改设置后卡片消失） */
 function computePos(course: Course): { top: string; height: string } {
-  const startIndex = course.startPeriod - 1
-  const span = course.endPeriod - course.startPeriod + 1
-  const total = periodCount.value
-  const top = (startIndex / total) * 100
+  const total = Math.max(periodCount.value, 1)
+  // 起止节次钳到 [1,total]，防止设置缩水/导入越界导致卡片超出可视区（代码审查 #3）
+  const start = Math.min(Math.max(course.startPeriod, 1), total)
+  const end = Math.min(Math.max(course.endPeriod, start), total)
+  const span = end - start + 1
+  const top = ((start - 1) / total) * 100
   const height = (span / total) * 100
   return { top: `${top.toFixed(3)}%`, height: `${Math.min(height, 100).toFixed(3)}%` }
 }

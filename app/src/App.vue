@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue'
-import { useReminder } from '@/composables/useReminder'
+import { useReminder, requestWebNotificationPermission } from '@/composables/useReminder'
 import { useSettings } from '@/composables/useSettings'
 import { useCourses } from '@/composables/useCourses'
 
-const { poll, reloadSchedule } = useReminder()
+const { poll, reloadSchedule, isNative } = useReminder()
 const { settings } = useSettings()
 const { courses } = useCourses()
 
@@ -14,6 +14,10 @@ onMounted(() => {
   // 装载整学期提醒，并每 60s 轮询到点提醒（Web）
   reloadSchedule()
   timer = setInterval(() => poll(), 60 * 1000)
+  // 仅当已开启提醒时才请求 Web 通知权限（避免首启打扰，UX-B1）
+  if (settings.value.notificationEnabled && !isNative) {
+    requestWebNotificationPermission()
+  }
 })
 
 onUnmounted(() => {

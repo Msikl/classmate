@@ -50,7 +50,13 @@ const periodOptions = computed(() =>
 )
 
 /** 持续节数可选（默认 1-4 节） */
-const durationOptions = [1, 2, 3, 4]
+/** 持续节数可选范围：1 .. min(总节数, 8)，随节次总数动态（C4/#6 修复） */
+const durationOptions = computed(() => {
+  const max = Math.min(periodCount.value, 8)
+  const arr: number[] = []
+  for (let i = 1; i <= max; i++) arr.push(i)
+  return arr
+})
 
 const form = reactive({
   name: '',
@@ -168,6 +174,7 @@ function onSubmit() {
               </select>
             </label>
           </div>
+          <p class="form-field__hint">节次即「第几节」：第 1 节起自 {{ periods[0]?.startTime ?? '—' }}。如你的学校时间不同，请先在「设置 → 节次安排」核对后返回。</p>
 
           <div class="form-field">
             <span class="form-field__label">颜色</span>
