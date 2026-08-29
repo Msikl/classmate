@@ -40,7 +40,13 @@ function onSubmitEdit(draft: {
   endPeriod: number
 }) {
   if (editing.value) {
-    updateCourse(editing.value.id, draft)
+    const id = editing.value.id
+    updateCourse(id, draft)
+    // 同步详情弹窗为新课程对象（编辑后弹窗立即显示新值，无需关掉重开）
+    if (selected.value && selected.value.id === id) {
+      const updated = getCoursesByDay(draft.dayOfWeek).find((c) => c.id === id) ?? selected.value
+      selected.value = updated
+    }
     editing.value = null
   }
 }
