@@ -11,7 +11,7 @@
 import type { Course } from '@/types/course'
 import { useCourses } from '@/composables/useCourses'
 import { useSettings } from '@/composables/useSettings'
-import { periods } from '@/composables/useSchedule'
+import { usePeriods } from '@/composables/useSchedule'
 
 export interface NotificationService {
   /** 发出一条即时通知；返回是否成功 */
@@ -161,6 +161,7 @@ export function createWebNotificationService(): NotificationService {
 export function useReminder() {
   const { courses } = useCourses()
   const { settings } = useSettings()
+  const { periods } = usePeriods()
   const scheduler = createScheduler()
   const service: NotificationService = createWebNotificationService()
 
@@ -183,7 +184,7 @@ export function useReminder() {
         day,
         settings.value.startDate,
         settings.value.notificationMinutes,
-        (pi) => periods[pi - 1],
+        (pi) => periods.value[pi - 1],
       )
       // 只保留未来时刻（排除已触达/已过的）
       items.push(...forDay.filter((r) => r.dueAt.getTime() > Date.now()))

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Course } from '@/types/course'
-import { getPeriodTime } from '@/composables/useSchedule'
+import { usePeriods } from '@/composables/useSchedule'
 
 const props = defineProps<{
   course: Course
@@ -10,9 +11,11 @@ const emit = defineEmits<{
   select: []
 }>()
 
-/** 首节起始 / 末节结束的绝对时间（上下两行） */
-const startTime = getPeriodTime(props.course.startPeriod).startTime
-const endTime = getPeriodTime(props.course.endPeriod).endTime
+const { periods } = usePeriods()
+
+/** 首节起始 / 末节结束的绝对时间（上下两行；随节次表联动） */
+const startTime = computed(() => periods.value[props.course.startPeriod - 1]?.startTime ?? '--:--')
+const endTime = computed(() => periods.value[props.course.endPeriod - 1]?.endTime ?? '--:--')
 </script>
 
 <template>

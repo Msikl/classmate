@@ -3,16 +3,25 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettings } from '@/composables/useSettings'
 import { useCourses } from '@/composables/useCourses'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { Course } from '@/types/course'
 
 const router = useRouter()
-const { settings, updateSettings } = useSettings()
+const { settings, updateSettings, resetSettings } = useSettings()
 const { importCourses, syncState } = useCourses()
 
 /** 表单草稿（本地编辑，保存时统一写入） */
 const form = ref({
   startDate: settings.value.startDate,
   totalWeeks: settings.value.totalWeeks,
+  classDurationMinutes: settings.value.classDurationMinutes,
+  breakMinutes: settings.value.breakMinutes,
+  morningStart: settings.value.morningStart,
+  morningPeriods: settings.value.morningPeriods,
+  noonStart: settings.value.noonStart,
+  noonPeriods: settings.value.noonPeriods,
+  eveningStart: settings.value.eveningStart,
+  eveningPeriods: settings.value.eveningPeriods,
   notificationEnabled: settings.value.notificationEnabled,
   notificationMinutes: settings.value.notificationMinutes,
 })
@@ -21,21 +30,61 @@ const form = ref({
 watch(settings, (s) => {
   form.value.startDate = s.startDate
   form.value.totalWeeks = s.totalWeeks
+  form.value.classDurationMinutes = s.classDurationMinutes
+  form.value.breakMinutes = s.breakMinutes
+  form.value.morningStart = s.morningStart
+  form.value.morningPeriods = s.morningPeriods
+  form.value.noonStart = s.noonStart
+  form.value.noonPeriods = s.noonPeriods
+  form.value.eveningStart = s.eveningStart
+  form.value.eveningPeriods = s.eveningPeriods
   form.value.notificationEnabled = s.notificationEnabled
   form.value.notificationMinutes = s.notificationMinutes
 })
 
 /** 总周数输入合法性 */
 const weeksValid = computed(() => form.value.totalWeeks >= 1 && form.value.totalWeeks <= 30)
+const classDurationValid = computed(() => form.value.classDurationMinutes >= 20 && form.value.classDurationMinutes <= 120)
+const breakValid = computed(() => form.value.breakMinutes >= 0 && form.value.breakMinutes <= 60)
 const minutesValid = computed(() => form.value.notificationMinutes >= 0 && form.value.notificationMinutes <= 120)
+const periodsValid = computed(
+  () => form.value.morningPeriods >= 0 && form.value.noonPeriods >= 0 && form.value.eveningPeriods >= 0,
+)
+
+/** 总节数（三段和，预览用） */
+const totalPeriodsPreview = computed(
+  () => form.value.morningPeriods + form.value.noonPeriods + form.value.eveningPeriods,
+)
 
 function save() {
   updateSettings({
     startDate: form.value.startDate,
     totalWeeks: form.value.totalWeeks,
+    classDurationMinutes: form.value.classDurationMinutes,
+    breakMinutes: form.value.breakMinutes,
+    morningStart: form.value.morningStart,
+    morningPeriods: form.value.morningPeriods,
+    noonStart: form.value.noonStart,
+    noonPeriods: form.value.noonPeriods,
+    eveningStart: form.value.eveningStart,
+    eveningPeriods: form.value.eveningPeriods,
     notificationEnabled: form.value.notificationEnabled,
     notificationMinutes: form.value.notificationMinutes,
   })
+}
+
+/** 重置确认框是否可见（替代 window.confirm，兼容手机 App） */
+const showResetConfirm = ref(false)
+
+/** 点击「重置为默认」：打开确认框 */
+function handleReset() {
+  showResetConfirm.value = true
+}
+
+/** 确认后真正重置 */
+function onResetConfirm() {
+  resetSettings()
+  showResetConfirm.value = false
 }
 
 function back() {
@@ -111,6 +160,60 @@ function handleImport() {
         <input v-model.number="form.totalWeeks" class="settings__input settings__input--sm" type="number" min="1" max="30" />
       </label>
       <p v-if="!weeksValid" class="settings__error">总周数应为 1–30</p>
+
+      <div class="settings__section-title">节次安排（共 {{ totalPeriodsPreview }} 节）</div>
+
+      <label class="settings__row">
+        <span class="settings__label">单节课时长（分钟）</span>
+        <input v-model.number="form.classDurationMinutes" class="settings__input settings__input--sm" type="number" min="20" max="120" />
+      </label>
+      <p v-if="!classDurationValid" class="settings__error">单节课时长应为 20–120 分钟</p>
+
+      <label class="settings__row">
+        <span class="settings__label">段内课间（分钟）</span>
+        <input v-model.number="form.breakMinutes" class="settings__input settings__input--sm" type="number" min="0" max="60" />
+      </label>
+      <p v-if="!breakValid" class="settings__error">课间应为 0–60 分钟</p>
+
+      <div class="settings__section-block">
+        <div class="settings__section-title2">上午</div>
+        <div class="settings__row">
+          <span class="settings__label">第 1 节开始</span>
+          <input v-model="form.morningStart" class="settings__input settings__input--time" type="time" />
+        </div>
+        <div class="settings__row">
+          <span class="settings__label">节数</span>
+          <input v-model.number="form.morningPeriods" class="settings__input settings__input--sm" type="number" min="0" max="12" />
+        </div>
+      </div>
+
+      <div class="settings__section-block">
+        <div class="settings__section-title2">下午</div>
+        <div class="settings__row">
+          <span class="settings__label">第 1 节开始</span>
+          <input v-model="form.noonStart" class="settings__input settings__input--time" type="time" />
+        </div>
+        <div class="settings__row">
+          <span class="settings__label">节数</span>
+          <input v-model.number="form.noonPeriods" class="settings__input settings__input--sm" type="number" min="0" max="12" />
+        </div>
+      </div>
+
+      <div class="settings__section-block">
+        <div class="settings__section-title2">晚上</div>
+        <div class="settings__row">
+          <span class="settings__label">第 1 节开始</span>
+          <input v-model="form.eveningStart" class="settings__input settings__input--time" type="time" />
+        </div>
+        <div class="settings__row">
+          <span class="settings__label">节数</span>
+          <input v-model.number="form.eveningPeriods" class="settings__input settings__input--sm" type="number" min="0" max="12" />
+        </div>
+      </div>
+
+      <p v-if="!periodsValid" class="settings__error">节数不能为负</p>
+
+      <button class="settings__reset" type="button" @click="handleReset">重置为默认</button>
     </section>
 
     <section class="settings__group">
@@ -153,6 +256,16 @@ function handleImport() {
     <p class="settings__hint">
       教务自动抓取（P4）需接入具体教务系统（登录/抓课表），当前以手动导入作为数据入口；真实原生课前通知（P3）待 Capacitor 壳与插件就绪后启用。
     </p>
+
+    <ConfirmDialog
+      v-if="showResetConfirm"
+      title="重置为默认"
+      desc="确定将所有设置重置为默认值？此操作不可撤销。"
+      confirm-text="重置"
+      :confirm-danger="true"
+      @confirm="onResetConfirm"
+      @cancel="showResetConfirm = false"
+    />
   </div>
 </template>
 
@@ -294,5 +407,41 @@ function handleImport() {
   font-size: 12px;
   color: #4e5969;
   margin: 0;
+}
+.settings__section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4e79a7;
+  padding: 14px 0 4px;
+}
+.settings__section-block {
+  border-top: 1px solid #f5f6f8;
+  margin-top: 4px;
+  padding-top: 2px;
+}
+.settings__section-title2 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4e5969;
+  padding: 10px 0 0;
+}
+.settings__input--time {
+  min-width: 110px;
+}
+.settings__reset {
+  width: 100%;
+  height: 40px;
+  margin: 8px 0 14px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background-color: #fafbfc;
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings__reset:hover {
+  color: #e15759;
+  border-color: #f5c6c2;
 }
 </style>

@@ -15,6 +15,14 @@ const STORAGE_KEY = 'settings'
 const DEFAULT_SETTINGS: Settings = {
   startDate: '2026-09-01',
   totalWeeks: 16,
+  classDurationMinutes: 45,
+  breakMinutes: 10,
+  morningStart: '08:00',
+  morningPeriods: 4,
+  noonStart: '14:00',
+  noonPeriods: 4,
+  eveningStart: '19:00',
+  eveningPeriods: 2,
   notificationEnabled: true,
   notificationMinutes: 30,
 }
@@ -45,7 +53,13 @@ function createStore() {
     writeJSON(STORAGE_KEY, _settings.value)
   }
 
-  return { settings, updateSettings, setStartDate }
+  /** 重置为默认设置（含三段节次配置），并持久化 */
+  function resetSettings(): void {
+    _settings.value = { ...DEFAULT_SETTINGS }
+    writeJSON(STORAGE_KEY, _settings.value)
+  }
+
+  return { settings, updateSettings, setStartDate, resetSettings }
 }
 
 let _instance: SettingsStore | null = null

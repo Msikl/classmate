@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Course } from '@/types/course'
-import { getPeriodTime } from '@/composables/useSchedule'
+import { usePeriods } from '@/composables/useSchedule'
 
 const props = defineProps<{
   course: Course
@@ -17,18 +18,21 @@ const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const
 
 const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const
 
+const { periods } = usePeriods()
+
 /** 节次区间文本，如 第 1-2 节 */
 const periodText =
   props.course.startPeriod === props.course.endPeriod
     ? `第 ${props.course.startPeriod} 节`
     : `第 ${props.course.startPeriod}-${props.course.endPeriod} 节`
 
-/** 首节起始 ~ 末节结束的绝对时间 */
-const timeRangeText = (() => {
-  const s = getPeriodTime(props.course.startPeriod)
-  const e = getPeriodTime(props.course.endPeriod)
+/** 首节起始 ~ 末节结束的绝对时间（随节次表联动） */
+const timeRangeText = computed(() => {
+  const s = periods.value[props.course.startPeriod - 1]
+  const e = periods.value[props.course.endPeriod - 1]
+  if (!s || !e) return ''
   return `${s.startTime} - ${e.endTime}`
-})()
+})
 </script>
 
 <template>

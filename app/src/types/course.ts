@@ -40,10 +40,26 @@ export interface Course {
   color: string
 }
 
-/** 应用设置（预留，P1/P2 启用） */
+/** 应用设置（P1/P2 启用，含三段式节次配置） */
 export interface Settings {
   startDate: string
   totalWeeks: number
+  /** 单节课时长（分钟）；默认 45 */
+  classDurationMinutes: number
+  /** 段内课间（分钟）；默认 10 */
+  breakMinutes: number
+  /** 早段第 1 节开始时间；默认 "08:00" */
+  morningStart: string
+  /** 早段节数；默认 4 */
+  morningPeriods: number
+  /** 午段第 1 节开始时间；默认 "14:00" */
+  noonStart: string
+  /** 午段节数；默认 4 */
+  noonPeriods: number
+  /** 晚段第 1 节开始时间；默认 "19:00" */
+  eveningStart: string
+  /** 晚段节数；默认 2 */
+  eveningPeriods: number
   notificationEnabled: boolean
   /** 默认提前 30 分钟提醒（已确认） */
   notificationMinutes: number

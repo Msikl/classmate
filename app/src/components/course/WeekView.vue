@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import CourseCard from '@/components/course/CourseCard.vue'
 import CourseDetailModal from '@/components/course/CourseDetailModal.vue'
 import CourseForm from '@/components/course/CourseForm.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useCourses } from '@/composables/useCourses'
 import { useWeek } from '@/composables/useWeek'
-import { periods } from '@/composables/useSchedule'
+import { usePeriods } from '@/composables/useSchedule'
 import type { DayOfWeek, Course } from '@/types/course'
 
 /** 课程 store 单例（响应式） */
 const { getCoursesByDay, updateCourse, removeCourse } = useCourses()
+
+/** 响应式节次表（随设置-单节时长联动） */
+const { periods } = usePeriods()
 
 /** 选中待展示详情的课程（null 时不弹窗） */
 const selected = ref<Course | null>(null)
 
 /** 编辑中的课程（非空时弹编辑表单） */
 const editing = ref<Course | null>(null)
+
+/** 待删除确认的课程（非空时弹确认框） */
+const deletePending = ref<Course | null>(null)
 
 /** 点击详情「编辑」：打开编辑表单（保留详情窗） */
 function onEdit(course: Course) {
@@ -37,16 +44,22 @@ function onSubmitEdit(draft: {
   }
 }
 
-/** 点击详情「删除」：确认后删除并关闭详情窗 */
+/** 点击详情「删除」：打开确认框（而非 window.confirm，兼容手机 App） */
 function onDelete(course: Course) {
-  if (window.confirm(`确认删除课程「${course.name}」？`)) {
-    removeCourse(course.id)
-    selected.value = null
-  }
+  deletePending.value = course
 }
 
-/** 节次总数（默认 10） */
-const periodCount = periods.length
+/** 确认删除 */
+function onDeleteConfirm() {
+  if (deletePending.value) {
+    removeCourse(deletePending.value.id)
+    selected.value = null
+  }
+  deletePending.value = null
+}
+
+/** 节次总数（随设置变化） */
+const periodCount = computed(() => periods.value.length)
 
 /** 列头：1..7 对应 一..日 */
 const WEEK_LABELS: readonly string[] = ['一', '二', '三', '四', '五', '六', '日']
@@ -66,8 +79,9 @@ function formatDayDate(day: DayOfWeek): string {
 function computePos(course: Course): { top: string; height: string } {
   const startIndex = course.startPeriod - 1
   const span = course.endPeriod - course.startPeriod + 1
-  const top = (startIndex / periodCount) * 100
-  const height = (span / periodCount) * 100
+  const total = periodCount.value
+  const top = (startIndex / total) * 100
+  const height = (span / total) * 100
   return { top: `${top.toFixed(3)}%`, height: `${Math.min(height, 100).toFixed(3)}%` }
 }
 </script>
@@ -119,6 +133,16 @@ function computePos(course: Course): { top: string; height: string } {
       :initial="editing"
       @submit="onSubmitEdit"
       @close="editing = null"
+    />
+
+    <ConfirmDialog
+      v-if="deletePending"
+      title="删除课程"
+      :desc="`确定删除课程「${deletePending.name}」？此操作不可撤销。`"
+      confirm-text="删除"
+      :confirm-danger="true"
+      @confirm="onDeleteConfirm"
+      @cancel="deletePending = null"
     />
   </div>
 </template>

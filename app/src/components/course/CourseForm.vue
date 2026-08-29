@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import { periods } from '@/composables/useSchedule'
+import { usePeriods } from '@/composables/useSchedule'
 import type { Course, DayOfWeek } from '@/types/course'
 
 /** 新建/编辑共用表单 */
@@ -24,14 +24,22 @@ const emit = defineEmits<{
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const
 const DAY_VALUES: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 7]
 
-/** periodCount 跟随节次表 */
-const periodCount = periods.length
+/** 响应式节次表（随设置-单节时长联动） */
+const { periods } = usePeriods()
+
+/** 节次总数 */
+const periodCount = computed(() => periods.value.length)
 
 /** 逐节可选列表（含绝对时间提示） */
-const periodOptions = periods.map((p) => ({
-  value: p.index,
-  label: `第 ${p.index} 节 · ${p.startTime}-${p.endTime}`,
-}))
+const periodOptions = computed(() =>
+  periods.value.map((p) => ({
+    value: p.index,
+    label: `第 ${p.index} 节 · ${p.startTime}-${p.endTime}`,
+  })),
+)
+
+/** 持续节数可选（默认 1-4 节） */
+const durationOptions = [1, 2, 3, 4]
 
 const form = reactive({
   name: '',
@@ -39,7 +47,8 @@ const form = reactive({
   classroom: '',
   dayOfWeek: 1 as DayOfWeek,
   startPeriod: 1,
-  endPeriod: 1,
+  /** 持续节数 */
+  durationPeriods: 1,
 })
 
 /** 填充初始值（挂载 / initial 变化时） */
@@ -51,15 +60,26 @@ watch(
     form.classroom = init?.classroom ?? ''
     form.dayOfWeek = init?.dayOfWeek ?? 1
     form.startPeriod = init?.startPeriod ?? 1
-    form.endPeriod = init?.endPeriod ?? Math.min(init?.startPeriod ?? 1, periodCount)
+    form.durationPeriods = Math.max(1, (init?.endPeriod ?? init?.startPeriod ?? 1) - (init?.startPeriod ?? 1) + 1)
   },
   { immediate: true },
 )
 
-/** 起止节次合法性：end >= start */
-const rangeValid = computed(() => form.endPeriod >= form.startPeriod)
+/** 自动算结束节次：start + duration - 1（clamp 到节次总数） */
+const autoEndPeriod = computed(() =>
+  Math.min(periodCount.value, form.startPeriod + form.durationPeriods - 1),
+)
+
 const nameValid = computed(() => form.name.trim().length > 0)
-const canSubmit = computed(() => nameValid.value && rangeValid.value)
+const canSubmit = computed(() => nameValid.value)
+
+/** 结束时间文本：首节起始 ~ 末节结束 */
+const endTimeText = computed(() => {
+  const s = periods.value[form.startPeriod - 1]
+  const e = periods.value[autoEndPeriod.value - 1]
+  if (!s || !e) return ''
+  return `${s.startTime} - ${e.endTime}`
+})
 
 function onSubmit() {
   if (!canSubmit.value) return
@@ -69,7 +89,7 @@ function onSubmit() {
     classroom: form.classroom.trim() || undefined,
     dayOfWeek: form.dayOfWeek,
     startPeriod: form.startPeriod,
-    endPeriod: form.endPeriod,
+    endPeriod: autoEndPeriod.value,
   })
 }
 </script>
@@ -119,16 +139,14 @@ function onSubmit() {
               </select>
             </label>
             <label class="form-field">
-              <span class="form-field__label">结束节次</span>
-              <select v-model.number="form.endPeriod" class="form-field__input">
-                <option v-for="o in periodOptions" :key="o.value" :value="o.value">
-                  {{ o.label }}
-                </option>
+              <span class="form-field__label">持续节数</span>
+              <select v-model.number="form.durationPeriods" class="form-field__input">
+                <option v-for="n in durationOptions" :key="n" :value="n">{{ n }} 节</option>
               </select>
             </label>
           </div>
 
-          <p v-if="!rangeValid" class="form-field__error">结束节次不能早于起始节次</p>
+          <p class="form-field__hint">结束时间：{{ endTimeText }}</p>
 
           <button class="form-modal__submit" type="button" :disabled="!canSubmit" @click="onSubmit">
             保存
@@ -224,6 +242,11 @@ function onSubmit() {
 .form-field__error {
   font-size: 12px;
   color: #e15759;
+  margin: 0;
+}
+.form-field__hint {
+  font-size: 12px;
+  color: #86909c;
   margin: 0;
 }
 .form-modal__submit {
