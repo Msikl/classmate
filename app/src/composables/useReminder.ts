@@ -237,22 +237,33 @@ export function useReminder() {
     typeof Capacitor !== 'undefined' &&
     !!Capacitor.isNativePlatform?.()
 
-  /** 生成未来 7 天的待触发提醒（两种平台共用；已排除过去时刻） */
+  /**
+   * 生成从今天到学期结束（startDate + totalWeeks 周）的所有待触发提醒。
+   * 一次性排满整学期，保证用户长期（一学期）不开 App 也能按点弹提醒（原生端由系统触发）。
+   */
   function buildUpcomingReminders(): Reminder[] {
-    const nowDay = new Date()
-    nowDay.setHours(0, 0, 0, 0)
+    // 学期结束日 = 第 1 周周一 + totalWeeks*7 - 1（= 最后一周周日）
+    const [sy, sm, sd] = settings.value.startDate.split('-').map(Number)
+    const semesterEnd = new Date(sy as number, (sm as number) - 1, (sd as number) - 1)
+    semesterEnd.setDate(semesterEnd.getDate() + settings.value.totalWeeks * 7 - 1)
+
     const items: Reminder[] = []
-    for (let i = 0; i <= 7; i++) {
-      const day = new Date(nowDay.getTime() + i * 24 * 60 * 60 * 1000)
-      day.setHours(0, 0, 0, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // 从今天（若在学期内）逐日扫描到学期结束
+    const cursor = new Date(today)
+    while (cursor.getTime() <= semesterEnd.getTime()) {
       const forDay = computeDailyReminders(
         courses.value,
-        day,
+        cursor,
         settings.value.startDate,
         settings.value.notificationMinutes,
         (pi) => periods.value[pi - 1],
       )
+      // 只保留未来时刻（排除今天已过/过去）
       items.push(...forDay.filter((r) => r.dueAt.getTime() > Date.now()))
+      cursor.setDate(cursor.getDate() + 1)
     }
     return items
   }
