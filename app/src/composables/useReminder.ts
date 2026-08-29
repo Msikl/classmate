@@ -10,6 +10,7 @@
 
 import type { Course } from '@/types/course'
 import { isOnWeek } from '@/types/course'
+import { Capacitor } from '@capacitor/core'
 import { useCourses } from '@/composables/useCourses'
 import { useSettings } from '@/composables/useSettings'
 import { usePeriods } from '@/composables/useSchedule'
@@ -139,11 +140,10 @@ export function createScheduler(): ReminderScheduler {
   }
 }
 
-/* ---------------- Web 通知适配器（P3 阶段占位，壳后换 Capacitor 插件） ---------------- */
+/* ---------------- 通知适配层 ---------------- */
 
 /** Web Notification 适配：浏览器 preview 下可弹系统通知；无权限时静默降级。 */
 export function createWebNotificationService(): NotificationService {
-  // 若浏览器支持且未请求权限，主动请求
   if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
     try {
       void Notification.requestPermission()
@@ -166,6 +166,63 @@ export function createWebNotificationService(): NotificationService {
   }
 }
 
+/**
+ * 原生本地通知适配（Capacitor @capacitor/local-notifications）。
+ * 把一批 Reminder 排成本地定时通知，到点由系统弹出（App 无需前台/无需轮询）。
+ * 仅供原生平台调用；浏览器下 isNative=false 不会走此路径。
+ */
+export function createNativeNotificationService() {
+  return {
+    /** 申请通知权限（Android 13+ 必需；返回是否已授权） */
+    async ensurePermission(): Promise<boolean> {
+      let ok = true
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        const res = await LocalNotifications.requestPermissions()
+        ok = res.display === 'granted'
+      } catch {
+        ok = false
+      }
+      return ok
+    },
+    /** 取消所有已排通知（重排前清理） */
+    async cancelAll(): Promise<void> {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        await LocalNotifications.cancel({ notifications: [] })
+      } catch {
+        // 忽略
+      }
+    },
+    /** 排一批延时通知 */
+    async schedule(reminders: Reminder[]): Promise<void> {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        await LocalNotifications.schedule({
+          notifications: reminders.map((r) => ({
+            id: hashCode(r.key),
+            title: r.title,
+            body: r.body,
+            schedule: { at: r.dueAt },
+            // 不指定 smallIcon：android 壳无 ic_stat 资源，省略可避免引用不存在资源导致崩溃
+          })),
+        })
+      } catch {
+        // 忽略
+      }
+    },
+  }
+}
+
+/** 简单字符串 hashCode → 稳定的通知 id */
+function hashCode(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
+  }
+  return (h >>> 0) % 2 ** 31
+}
+
 /* ---------------- useReminder 组合式函数（绑定 store + 设置） ---------------- */
 
 export function useReminder() {
@@ -173,16 +230,15 @@ export function useReminder() {
   const { settings } = useSettings()
   const { periods } = usePeriods()
   const scheduler = createScheduler()
-  const service: NotificationService = createWebNotificationService()
+  const webService: NotificationService = createWebNotificationService()
 
-  const notifyService = service
+  /** 平台检测：true=Capacitor 原生环境（手机 App） */
+  const isNative =
+    typeof Capacitor !== 'undefined' &&
+    !!Capacitor.isNativePlatform?.()
 
-  /** 重新装载未来提醒（供定时器首次/设置变化时调用） */
-  function reloadSchedule() {
-    if (!settings.value.notificationEnabled) {
-      // 关闭时不清空已装载队列（简单跳过装载）
-      return
-    }
+  /** 生成未来 7 天的待触发提醒（两种平台共用；已排除过去时刻） */
+  function buildUpcomingReminders(): Reminder[] {
     const nowDay = new Date()
     nowDay.setHours(0, 0, 0, 0)
     const items: Reminder[] = []
@@ -196,17 +252,34 @@ export function useReminder() {
         settings.value.notificationMinutes,
         (pi) => periods.value[pi - 1],
       )
-      // 只保留未来时刻（排除已触达/已过的）
       items.push(...forDay.filter((r) => r.dueAt.getTime() > Date.now()))
+    }
+    return items
+  }
+
+  /** 重新装载未来提醒 */
+  async function reloadSchedule() {
+    if (!settings.value.notificationEnabled) return
+    const items = buildUpcomingReminders()
+
+    if (isNative) {
+      const native = createNativeNotificationService()
+      const granted = await native.ensurePermission()
+      if (granted && items.length > 0) {
+        await native.cancelAll()
+        await native.schedule(items)
+      }
+      return
     }
     scheduler.enqueueReminders(items)
   }
 
-  /** 供定时器调用：处理到点提醒 (notify) */
+  /** 供定时器调用（仅 Web 环境使用；原生由系统触发无需轮询） */
   function poll(): void {
+    if (isNative) return
     const due = scheduler.tick(new Date())
-    for (const r of due) notifyService.notify(r.title, r.body)
+    for (const r of due) webService.notify(r.title, r.body)
   }
 
-  return { scheduler, poll, reloadSchedule, notifyService }
+  return { scheduler, poll, reloadSchedule, isNative, notifyService: webService }
 }
