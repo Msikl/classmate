@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// 签名密码从本地未入库的 keystore.properties 读取（不入 git，见 android/.gitignore）
+def keystoreProps = new Properties()
+def keystorePropsFile = file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "com.classmate.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -19,9 +26,9 @@ android {
     signingConfigs {
         release {
             storeFile file('release.keystore')
-            storePassword 'ClassMate_1787980971'
+            storePassword keystoreProps['STORE_PASSWORD'] ?: 'classmate_store'
             keyAlias 'classmate'
-            keyPassword 'ClassMate_1787980971'
+            keyPassword keystoreProps['KEY_PASSWORD'] ?: 'classmate_key'
         }
     }
     buildTypes {

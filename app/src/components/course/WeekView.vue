@@ -62,6 +62,9 @@ function onDeleteConfirm() {
 /** 节次总数（随设置变化） */
 const periodCount = computed(() => periods.value.length)
 
+/** 动态节次数 → CSS 变量，覆盖静态 --period-count（改设置即跟刻度对齐） */
+const gridStyle = computed(() => ({ '--period-count': String(periodCount.value) }))
+
 /** 列头：1..7 对应 一..日 */
 const WEEK_LABELS: readonly string[] = ['一', '二', '三', '四', '五', '六', '日']
 const DAYS = [1, 2, 3, 4, 5, 6, 7] as const satisfies readonly DayOfWeek[]
@@ -105,7 +108,7 @@ function computePos(course: Course): { top: string; height: string } {
 
 <template>
   <!-- 课表滚动容器：刻度与课程一体，表头吸顶 -->
-  <div class="week-view">
+  <div class="week-view" :style="gridStyle">
     <!-- sticky 表头行 -->
     <div class="week-view__head-row">
       <div class="week-view__corner" />

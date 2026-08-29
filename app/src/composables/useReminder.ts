@@ -185,11 +185,15 @@ export function createNativeNotificationService() {
       }
       return ok
     },
-    /** 取消所有已排通知（重排前清理） */
+    /** 取消所有已排通知（先取 pending 再逐个 cancel，传空数组无效——F05 修复） */
     async cancelAll(): Promise<void> {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications')
-        await LocalNotifications.cancel({ notifications: [] })
+        const pending = await LocalNotifications.getPending()
+        const ids = pending?.notifications?.map((n) => ({ id: n.id })) ?? []
+        if (ids.length > 0) {
+          await LocalNotifications.cancel({ notifications: ids })
+        }
       } catch {
         // 忽略
       }
@@ -242,10 +246,16 @@ export function useReminder() {
    * 一次性排满整学期，保证用户长期（一学期）不开 App 也能按点弹提醒（原生端由系统触发）。
    */
   function buildUpcomingReminders(): Reminder[] {
-    // 学期结束日 = 第 1 周周一 + totalWeeks*7 - 1（= 最后一周周日）
+    // 学期末日 = 第 1 周周一起点 + totalWeeks*7 - 1（= 最后一周周日）。
+    // 用「开学所在周的周一」作起点，避免开学日恰为周一时 `-1 天` 算错（F07 修复）。
     const [sy, sm, sd] = settings.value.startDate.split('-').map(Number)
-    const semesterEnd = new Date(sy as number, (sm as number) - 1, (sd as number) - 1)
-    semesterEnd.setDate(semesterEnd.getDate() + settings.value.totalWeeks * 7 - 1)
+    const startDay = new Date(sy as number, (sm as number) - 1, sd as number)
+    const firstMondayDate = new Date(startDay)
+    const startDow = startDay.getDay() === 0 ? 7 : startDay.getDay()
+    firstMondayDate.setDate(startDay.getDate() - (startDow - 1))
+    const semesterEnd = new Date(
+      firstMondayDate.getTime() + (settings.value.totalWeeks * 7 - 1) * 24 * 60 * 60 * 1000,
+    )
 
     const items: Reminder[] = []
     const today = new Date()
@@ -268,18 +278,30 @@ export function useReminder() {
     return items
   }
 
-  /** 重新装载未来提醒 */
+  /**
+   * 重新装载未来提醒。
+   * - 原生：始终先 cancel 全部旧的，再排当前（切课程/改时间不残留；关闭提醒时仅清空）。
+   * - Web：enabled 时装载；disabled 时清空队列。
+   */
   async function reloadSchedule() {
-    if (!settings.value.notificationEnabled) return
     const items = buildUpcomingReminders()
 
     if (isNative) {
       const native = createNativeNotificationService()
-      const granted = await native.ensurePermission()
-      if (granted && items.length > 0) {
+      if (!settings.value.notificationEnabled) {
+        // 关闭提醒：取消所有已排通知
         await native.cancelAll()
+        return
+      }
+      const granted = await native.ensurePermission()
+      await native.cancelAll()
+      if (granted && items.length > 0) {
         await native.schedule(items)
       }
+      return
+    }
+    // Web 分支
+    if (!settings.value.notificationEnabled) {
       return
     }
     scheduler.enqueueReminders(items)

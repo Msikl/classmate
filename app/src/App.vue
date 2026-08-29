@@ -2,14 +2,16 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useReminder } from '@/composables/useReminder'
 import { useSettings } from '@/composables/useSettings'
+import { useCourses } from '@/composables/useCourses'
 
 const { poll, reloadSchedule } = useReminder()
 const { settings } = useSettings()
+const { courses } = useCourses()
 
 let timer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-  // 装载未来 7 天提醒，并每 60s 轮询到点提醒
+  // 装载整学期提醒，并每 60s 轮询到点提醒（Web）
   reloadSchedule()
   timer = setInterval(() => poll(), 60 * 1000)
 })
@@ -18,8 +20,9 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-// 设置变化（开学日期/提醒分钟/开关）时重装调度
+// 设置变化（开学日期/提醒分钟/开关）或课程变化时重排既有通知（原生端先 cancel 再排，避免残留）
 watch(settings, () => reloadSchedule(), { deep: true })
+watch(courses, () => reloadSchedule(), { deep: true })
 </script>
 
 <template>

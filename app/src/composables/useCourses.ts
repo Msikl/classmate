@@ -14,6 +14,8 @@ import { readJSON, writeJSON } from '@/utils/storage'
 
 /** localStorage key（前缀 classmate: 由 storage.ts 统一加） */
 const STORAGE_KEY = 'courses'
+/** 是否已播种过种子的标记（区分「从未用过」与「用户清空课程」） */
+const INITED_KEY = 'courses-initialized'
 
 /** 内置种子课程：仅当本地存储为空时作为初始数据写入 */
 const seedCourses: Course[] = [
@@ -40,13 +42,18 @@ function makeId(): string {
   return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** 初始化课程：localStorage 有则读取，否则用种子数据并首写 */
+/** 初始化课程：已初始化则以本地存储为准（含空数组）；从未用过（无标记且无数据）才播种种子 */
 function loadInitial(): Course[] {
   const saved = readJSON<Course[]>(STORAGE_KEY, [])
-  if (saved.length > 0) return saved
-  const seeded = assignColors(seedCourses)
-  writeJSON(STORAGE_KEY, seeded)
-  return seeded
+  const inited = readJSON<boolean>(INITED_KEY, false)
+  if (inited) return saved
+  // 从未初始化：仅在确实无数据时播种一次并打标记
+  if (saved.length === 0) {
+    const seeded = assignColors(seedCourses)
+    writeJSON(STORAGE_KEY, seeded)
+  }
+  writeJSON<boolean>(INITED_KEY, true)
+  return saved.length > 0 ? saved : assignColors(seedCourses)
 }
 
 function assignColors(courses: Course[]): Course[] {
