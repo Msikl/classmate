@@ -2,12 +2,48 @@
 import { ref } from 'vue'
 import CourseCard from '@/components/course/CourseCard.vue'
 import CourseDetailModal from '@/components/course/CourseDetailModal.vue'
-import { getCoursesByDay } from '@/composables/useCourses'
+import CourseForm from '@/components/course/CourseForm.vue'
+import { useCourses } from '@/composables/useCourses'
+import { useWeek } from '@/composables/useWeek'
 import { periods } from '@/composables/useSchedule'
 import type { DayOfWeek, Course } from '@/types/course'
 
+/** 课程 store 单例（响应式） */
+const { getCoursesByDay, updateCourse, removeCourse } = useCourses()
+
 /** 选中待展示详情的课程（null 时不弹窗） */
 const selected = ref<Course | null>(null)
+
+/** 编辑中的课程（非空时弹编辑表单） */
+const editing = ref<Course | null>(null)
+
+/** 点击详情「编辑」：打开编辑表单（保留详情窗） */
+function onEdit(course: Course) {
+  editing.value = course
+}
+
+/** 编辑提交：合并更新后关闭表单 */
+function onSubmitEdit(draft: {
+  name: string
+  teacher?: string
+  classroom?: string
+  dayOfWeek: DayOfWeek
+  startPeriod: number
+  endPeriod: number
+}) {
+  if (editing.value) {
+    updateCourse(editing.value.id, draft)
+    editing.value = null
+  }
+}
+
+/** 点击详情「删除」：确认后删除并关闭详情窗 */
+function onDelete(course: Course) {
+  if (window.confirm(`确认删除课程「${course.name}」？`)) {
+    removeCourse(course.id)
+    selected.value = null
+  }
+}
 
 /** 节次总数（默认 10） */
 const periodCount = periods.length
@@ -16,16 +52,12 @@ const periodCount = periods.length
 const WEEK_LABELS: readonly string[] = ['一', '二', '三', '四', '五', '六', '日']
 const DAYS = [1, 2, 3, 4, 5, 6, 7] as const satisfies readonly DayOfWeek[]
 
-/**
- * 本周一日期（占位）。
- * 以 2026-09-07（周一）作为第 1 周的周一，推算各天日期。
- * P2 改为读取「设置」中的开学日期。
- */
-const WEEK_START_DATE = new Date(2026, 8, 7) // 2026-09-07
+/** 当前周信息（P2：based on 开学日期自动计算） */
+const { weekStartDate } = useWeek()
 
-/** 取某天（1..7）对应的 月/日 显示文本 */
+/** 取某天（1..7，1=周一）对应的 月/日 显示文本 */
 function formatDayDate(day: DayOfWeek): string {
-  const d = new Date(WEEK_START_DATE)
+  const d = new Date(weekStartDate.value)
   d.setDate(d.getDate() + (day - 1))
   return `${d.getMonth() + 1}-${d.getDate()}`
 }
@@ -74,7 +106,20 @@ function computePos(course: Course): { top: string; height: string } {
       </div>
     </div>
 
-    <CourseDetailModal v-if="selected" :course="selected" @close="selected = null" />
+    <CourseDetailModal
+      v-if="selected"
+      :course="selected"
+      @close="selected = null"
+      @edit="onEdit"
+      @delete="onDelete"
+    />
+
+    <CourseForm
+      v-if="editing"
+      :initial="editing"
+      @submit="onSubmitEdit"
+      @close="editing = null"
+    />
   </div>
 </template>
 

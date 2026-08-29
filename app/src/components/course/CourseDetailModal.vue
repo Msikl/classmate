@@ -8,6 +8,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  edit: [course: Course]
+  delete: [course: Course]
 }>()
 
 /** 1..7 → 一二三四五六日 */
@@ -59,6 +61,15 @@ const timeRangeText = (() => {
             <dd>{{ WEEK_LABELS[course.dayOfWeek - 1] }}周 · 全学期</dd>
           </div>
         </dl>
+
+        <footer class="modal__footer">
+          <button class="modal__btn modal__btn--delete" type="button" @click="emit('delete', course)">
+            删除
+          </button>
+          <button class="modal__btn modal__btn--edit" type="button" @click="emit('edit', course)">
+            编辑
+          </button>
+        </footer>
       </div>
     </div>
   </Teleport>
@@ -138,5 +149,29 @@ const timeRangeText = (() => {
   margin: 0;
   font-size: 14px;
   color: #1f2329;
+}
+.modal__footer {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid #f0f1f3;
+}
+.modal__btn {
+  flex: 1;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal__btn--delete {
+  background-color: #fdeceb;
+  color: #e15759;
+  border: 1px solid #f5c6c2;
+}
+.modal__btn--edit {
+  background-color: #4e79a7;
+  color: #fff;
 }
 </style>
